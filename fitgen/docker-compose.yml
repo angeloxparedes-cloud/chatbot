@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  fitgen-bot:
+    build: .
+    container_name: fitgen-telegram-bot
+    env_file:
+      - .env
+    restart: unless-stopped
+    # No ports needed: the bot uses outbound long-polling to Telegram's API,
+    # it doesn't need to accept inbound connections.
