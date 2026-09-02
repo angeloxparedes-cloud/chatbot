@@ -10,6 +10,9 @@ Run locally:
 Requires TELEGRAM_BOT_TOKEN and GEMINI_API_KEY set (see .env.example).
 """
 import logging
+import os
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from telegram import Update
 from telegram.constants import ChatAction
@@ -128,7 +131,37 @@ def build_app() -> Application:
     return application
 
 
+class _HealthHandler(BaseHTTPRequestHandler):
+    """Minimal handler so Render (or any 'web service' host) sees an open
+    port and a 200 response. Has nothing to do with the bot logic itself —
+    it exists purely to satisfy free-tier hosts that require an HTTP
+    listener and use inactivity on that port to decide when to sleep the
+    service. An external uptime pinger hitting this URL every ~10 minutes
+    keeps the service from spinning down."""
+
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"FitGen bot is running")
+
+    def log_message(self, format, *args):
+        pass  # silence per-request logging noise
+
+
+def _start_health_server() -> None:
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(("0.0.0.0", port), _HealthHandler)
+    logger.info(f"Health check server listening on port {port}")
+    server.serve_forever()
+
+
 def main() -> None:
+    # Only start the keep-alive HTTP server when a PORT is provided by the
+    # host (Render sets this automatically). Local/Docker/VPS runs without
+    # PORT set will skip it, since it's not needed there.
+    if "PORT" in os.environ:
+        threading.Thread(target=_start_health_server, daemon=True).start()
+
     app = build_app()
     logger.info("FitGen Telegram bot starting (long polling)...")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
