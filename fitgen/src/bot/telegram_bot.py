@@ -144,6 +144,17 @@ class _HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"FitGen bot is running")
 
+    def do_HEAD(self):
+        # Uptime monitors (e.g. UptimeRobot) commonly send HEAD requests
+        # instead of GET to check liveness without downloading a body.
+        # BaseHTTPRequestHandler returns 501 Not Implemented for any HTTP
+        # method without a matching do_* handler, which made every HEAD
+        # check fail even though the server was perfectly healthy for GET
+        # requests. Responding 200 here (headers only, no body -- that's
+        # what HEAD means) fixes that false "down" reading.
+        self.send_response(200)
+        self.end_headers()
+
     def log_message(self, format, *args):
         pass  # silence per-request logging noise
 
